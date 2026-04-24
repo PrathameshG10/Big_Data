@@ -1,0 +1,272 @@
+1. Create transactional emp and dept tables in orc format. Load data from staging table.
+
+create table emp(
+empno INT ,
+ename STRING ,
+job STRING ,
+mgr INT ,
+hire date,
+sal decimal(8,2),
+comm decimal(8,2),
+deptno INT
+)
+stored as orc
+tblproperties('transcational'='true')
+
+insert into emp
+select * from emp_staging
+
+create table dept(
+deptno INT ,
+dname STRING ,
+loc STRING
+)
+stored as orc
+tblproperties('transcational'='true')
+
+insert into dept
+select * from dept_staging
+
+
+2. Count number of employees per dept per job. Print all combinations of subtotals and grand totals.
+
+select deptno , job , count(*)
+from emp
+group by deptno , job
+with cube
+
+3. Display only subtotals of deptwise employees and jobwise employees (count).
+
+(
+select deptno , job , count(*)
+from emp
+group by deptno , job
+with cube
+)
+
+4. Find hottest and coolest month from ncdc data.
+
+(SELECT month , AVG(temp) avgtemp FROM ncdc_staging1
+WHERE temp != 9999 AND quality IN (0, 1, 2, 4, 5, 9)
+GROUP BY month
+ORDER BY avgtemp DESC
+LIMIT 1)
+UNION
+(SELECT month , AVG(temp) avgtemp FROM ncdc_staging1
+WHERE temp != 9999 AND quality IN (0, 1, 2, 4, 5, 9)
+GROUP BY month
+ORDER BY avgtemp ASC
+LIMIT 1);
+
+
+5. Create a table movie_staging and load data from movies_caret.csv.
+   - Hint: TBLPROPERTIES ('skip.header.line.count'='1')
+   - Treat `genres` as ARRAY.
+   - A. count number of movies for given genre = 'Action'
+   
+   - B. count number of genres for movie "Toy Story (1995)"
+   
+create table movies_staging(
+moviesID INT ,
+title STRING ,
+genres ARRAY<STRING>)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '^'
+COLLECTION ITEMS TERMINATED BY '|'
+STORED AS TEXTFILE
+TBLPROPERTIES ('skip.header.line.count'='1')
+
+A. select  count(genres) from movies_staging where array_contains(genres , 'Action')
+B. select  size(genres) from movies_staging where title='Toy Story (1995)'
+   
+   
+6. Execute following queries on "emp" and "dept" dataset.
+   1. Create table "emp_staging" and load data from emp.csv in it.
+   2. Create table "dept_staging" and load data from dept.csv in it.
+   3. Display dept name and number of emps in each dept.
+   
+   0: jdbc:hive2://localhost:10000/default> select d.dname , count(e.empno) from dept_staging d inner join emp_staging e on d.deptno = e.deptno group by d.dname;
+
+   
+   4. Display emp name and his dept name.
+   
+   select e.ename , d.dname from emp_staging e inner join dept_staging d on e.deptno = d.deptno
+
+   
+   5. Display all emps (name, job, deptno) with their manager (name, job, deptno), who are not in their department.
+   
+   SELECT 
+    e1.ename AS Emp_Name, 
+    e1.job AS Emp_Job, 
+    e1.deptno AS Emp_Dept,
+    e2.ename AS Mgr_Name, 
+    e2.job AS Mgr_Job, 
+    e2.deptno AS Mgr_Dept
+FROM emp_staging e1
+JOIN emp_staging e2 ON e1.Mgr = e2.empno
+WHERE e1.deptno <> e2.deptno;
+   
+   6. Display all manager names with list of all dept names (where they can work).
+   
+   SELECT DISTINCT 
+    m.EName AS Manager_Name, 
+    d.DName AS Dept_Name
+FROM emp e
+JOIN emp m ON e.Mgr = m.EmpNo
+JOIN dept d;
+   
+   7. Display job-wise total salary along with total salary of all employees.
+   
+   SELECT 
+    Job, 
+    SUM(Sal) AS Total_Salary
+FROM emp
+GROUP BY Job WITH ROLLUP;
+   
+   8. Display dept-wise total salary along with total salary of all employees.
+
+   SELECT deptno, SUM(sal) FROM emp_staging GROUP BY deptno WITH ROLLUP;
+
+   9. Display per dept job-wise total salary along with total salary of all employees.
+
+   SELECT deptno, job, SUM(sal) FROM emp_staging GROUP BY deptno, job WITH CUBE;
+
+   10. Display number of employees recruited per year in descending order of employee count.
+
+SELECT YEAR(hire), COUNT(empno) AS no_of_emps_hired FROM emp_staging GROUP BY YEAR(hire) ORDER BY COUNT(empno) DESC;
+
+   11. Display unique job roles who gets commission.
+
+ SELECT DISTINCT job FROM emp_staging WHERE comm IS NOT NULL;
+
+   12. Display dept name in which there is no employee (using sub-query).
+
+   SELECT dname FROM dept_staging WHERE deptno NOT IN (SELECT deptno FROM emp_staging);
+
+
+   13. Display emp-name, dept-name, salary, total salary of that dept (using sub-query).
+
+   SELECT 
+    e.ename,
+    d.dname,
+    e.sal,
+    (
+        SELECT SUM(e2.sal)
+        FROM emp_staging e2
+        WHERE e2.deptno = e.deptno
+    ) AS total_dept_salary
+FROM emp_staging e
+JOIN dept_staging d 
+ON e.deptno = d.deptno;
+
+   14. Display all managers and presidents along with number of (immediate) subbordinates.
+
+SELECT 
+    e.ename,
+    e.job,
+    COUNT(s.empno) AS no_of_subordinates
+FROM emp_staging e
+LEFT JOIN emp_staging s
+ON e.empno = s.mgr
+WHERE e.job IN ('MANAGER', 'PRESIDENT')
+GROUP BY e.empno, e.ename, e.job;
+
+
+   1. Create table "books_staging" and load books.csv in it.
+
+   CREATE TABLE books_staging(
+id INT,
+title STRING,
+author STRING,
+subject STRING,
+price DECIMAL(8,2)
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+
+LOAD DATA LOCAL INPATH '/media/sunbeam/New Volume/CDAC DBDA/Big Data/BigData/data/books.csv' INTO TABLE books_staging;
+
+
+   2. Create table "books_orc" as transactional table.
+
+   CREATE TABLE books_orc(
+id INT,
+title STRING,
+author STRING,
+subject STRING,
+price DECIMAL(8,2)
+)
+STORED AS ORC
+TBLPROPERTIES('transactional'='true');
+
+   3. Create a materialized view for summary -- Subjectwise average book price.
+
+   CREATE MATERIALIZED VIEW mv_subject_avg_price AS
+SELECT 
+    subject,
+    AVG(price) AS avg_price
+FROM books_orc
+GROUP BY subject;
+
+
+   4. Display a report that shows subject and average price in descending order -- on materialized view.
+
+   SELECT 
+    subject,
+    avg_price
+FROM mv_subject_avg_price
+ORDER BY avg_price DESC;
+
+
+   7. Insert "new" records from books_staging into books_orc.
+
+   LOAD DATA LOCAL INPATH 'newbooks.csv'
+   INTO TABLE books_staging;
+
+   8. Display a report that shows subject and average price in descending order -- on materialized view. -- Are new books visible in report?
+   
+   SELECT subject, avg_price
+FROM mv_subject_avg_price
+ORDER BY avg_price DESC;
+   
+   9. Rebuild the materialized view.
+   
+   ALTER MATERIALIZED VIEW mv_subject_avg_price REBUILD;
+   
+   10. Display a report that shows subject and average price in descending order -- on materialized view. -- Are new books visible in report?
+   
+   SELECT subject, avg_price
+FROM mv_subject_avg_price
+ORDER BY avg_price DESC;
+   
+   11. Increase price of all Java books by 10% in books_orc.
+
+   UPDATE books_orc
+SET price = price * 1.10
+WHERE subject = 'Java';
+
+   12. Rebuild the materialized view.
+
+   ALTER MATERIALIZED VIEW mv_subject_avg_price REBUILD;
+   
+   13. Display a report that shows subject and average price in descending order -- on materialized view. -- Are new price changes visible in report?
+   
+   SELECT subject, avg_price
+FROM mv_subject_avg_price
+ORDER BY avg_price DESC;
+   
+   14. Delete all Java books.
+
+   DELETE FROM books_orc
+WHERE subject = 'Java';
+
+   15. Rebuild the materialized view.
+
+ALTER MATERIALIZED VIEW mv_subject_avg_price REBUILD;
+
+   16. Display a report that shows subject and average price in descending order -- on materialized view. -- Are new price changes visible in report?
+
+   SELECT subject, avg_price
+FROM mv_subject_avg_price
+ORDER BY avg_price DESC;

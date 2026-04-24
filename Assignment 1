@@ -1,0 +1,55 @@
+A. Retrieve the names of all customers who made a purchase.
+
+0: jdbc:hive2://localhost:10000/default> select * from customers c inner join sales s on c.customerID = s.customerID;
+
+
+B. List the products and their total sales amounts for a given date range.
+
+INFO  : Executing command(queryId=sunbeam_20260421220025_31d6f2eb-0537-41e9-a356-f12b83bfe1d5): select p.productName , s.TotalAmount from products p inner join sales s on p.productID = s.productID where SaleDate between '2023-01-01' and '2023-02-02'
+
+C. Find the total sales amount for each product category.
+
+SELECT 
+    p.Category, 
+    SUM(s.TotalAmount) AS CategoryTotalSales
+FROM Products p
+JOIN Sales s ON p.ProductID = s.ProductID
+GROUP BY p.Category;
+
+D. Identify the customers who made purchases in a speciﬁc city.
+
+0: jdbc:hive2://localhost:10000/default> select c.name , l.city from customers c inner join locations l on c.locationID = l.locationID where l.city = 'delhi';
+
+
+E. Calculate the average age of customers who bought products in the 'Electronics' category.
+
+SELECT AVG(c.age) FROM customers c JOIN sales s ON s.customerid = c.customerid JOIN products p ON p.productid = s.productid 
+WHERE p.category = 'Electronics';
+
+F. List the top 3 products based on total sales amount.
+
+SELECT p.productname, s.totalamount FROM products p JOIN sales s ON s.productid = p.productid 
+ORDER BY s.totalamount DESC LIMIT 3;
+
+G. Find the total sales amount for each month.
+
+SELECT MONTH(saledate) AS month, SUM(totalamount) AS totalsale FROM sales GROUP BY MONTH(saledate);
+
+H. Identify the products with no sales.
+
+SELECT p.productname FROM products p WHERE p.productid NOT IN (SELECT s.productid FROM sales s);
+
+I. Calculate the total sales amount for each state. 
+
+SELECT l.state, SUM(s.TotalAmount) AS total_sales
+FROM Sales s
+JOIN Customers c ON s.CustomerID = c.CustomerID
+JOIN Locations l ON c.LocationID = l.LocationID
+GROUP BY l.state;
+
+J. Retrieve the customer names and their highest purchase amount.
+
+SELECT c.Name, MAX(s.TotalAmount) AS highest_purchase
+FROM Sales s
+JOIN Customers c ON s.CustomerID = c.CustomerID
+GROUP BY c.Name;
