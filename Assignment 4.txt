@@ -1,0 +1,207 @@
+1. Create a transactional ORC table "ﬁre_data" with appropriate data types partitioned by city and buckted by call number into 4 buckets. Load data from
+staging table into this table.
+
+CREATE TABLE fire_calls_staging (
+    Call_Number STRING,
+    Unit_ID STRING,
+    Incident_Number STRING,
+    Call_Type STRING,
+    Call_Date STRING,
+    Watch_Date STRING,
+    Received_DtTm STRING,
+    Entry_DtTm STRING,
+    Dispatch_DtTm STRING,
+    Response_DtTm STRING,
+    On_Scene_DtTm STRING,
+    Transport_DtTm STRING,
+    Hospital_DtTm STRING,
+    Call_Final_Disposition STRING,
+    Available_DtTm STRING,
+    Address STRING,
+    City STRING,
+    Zipcode_of_Incident STRING,
+    Battalion STRING,
+    Station_Area STRING,
+    Box STRING,
+    Original_Priority STRING,
+    Priority STRING,
+    Final_Priority STRING,
+    ALS_Unit STRING,
+    Call_Type_Group STRING,
+    Number_of_Alarms STRING,
+    Unit_Type STRING,
+    Unit_sequence_in_call_dispatch STRING,
+    Fire_Prevention_District STRING,
+    Supervisor_District STRING,
+    Neighborhooods_Analysis_Boundaries STRING,
+    RowID STRING,
+    case_location STRING,
+    data_as_of STRING,
+    data_loaded_at STRING,
+    Analysis_Neighborhoods STRING
+)
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
+WITH SERDEPROPERTIES (
+   "separatorChar" = ",",
+   "quoteChar"     = "\"",
+   "escapeChar"    = "\\"
+)  
+STORED AS TEXTFILE
+TBLPROPERTIES('skip.header.line.count'='1');
+
+CREATE TABLE fire_data (
+    call_number INT,
+    unit_id STRING,
+    incident_number INT,
+    call_type STRING,
+    call_date STRING,
+    watch_date STRING,
+    received_dttm TIMESTAMP,
+    entry_dttm TIMESTAMP,
+    dispatch_dttm TIMESTAMP,
+    response_dttm TIMESTAMP,
+    on_scene_dttm TIMESTAMP,
+    transport_dttm TIMESTAMP,
+    hospital_dttm TIMESTAMP,
+    call_final_disposition STRING,
+    available_dttm TIMESTAMP,
+    address STRING,
+    zipcode_of_incident INT,
+    battalion STRING,
+    station_area STRING,
+    box STRING,
+    original_priority STRING,
+    priority STRING,
+    final_priority STRING,
+    als_unit BOOLEAN,
+    call_type_group STRING,
+    number_of_alarms INT,
+    unit_type STRING,
+    unit_sequence_in_call_dispatch INT,
+    fire_prevention_district STRING,
+    supervisor_district STRING,
+    neighborhoods_boundaries STRING,
+    row_id STRING,
+    case_location STRING,
+    data_as_of TIMESTAMP,
+    data_loaded_at TIMESTAMP,
+    analysis_neighborhoods INT
+)
+PARTITIONED BY (city STRING)
+CLUSTERED BY (call_number) INTO 4 BUCKETS
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.orc.OrcSerde'
+STORED AS ORC
+TBLPROPERTIES ('transactional'='true');
+
+SET hive.exec.dynamic.partition = true;
+SET hive.exec.dynamic.partition.mode = nonstrict;
+SET hive.enforce.bucketing = true;
+
+INSERT INTO fire_data PARTITION (city)
+SELECT 
+    CAST(Call_Number AS INT), 
+    Unit_ID, 
+    CAST(Incident_Number AS INT), 
+    Call_Type, 
+    FROM_UNIXTIME(UNIX_TIMESTAMP(Call_Date, 'MM/dd/yyyy')) as call_date,
+    FROM_UNIXTIME(UNIX_TIMESTAMP(Watch_Date, 'MM/dd/yyyy')) as watch_date,
+    FROM_UNIXTIME(UNIX_TIMESTAMP(Received_DtTm, 'MM/dd/yyyy hh:mm:ss a')) as received_dttm,
+    FROM_UNIXTIME(UNIX_TIMESTAMP(Entry_DtTm, 'MM/dd/yyyy hh:mm:ss a')) as entry_dttm,
+    FROM_UNIXTIME(UNIX_TIMESTAMP(Dispatch_DtTm, 'MM/dd/yyyy hh:mm:ss a')) as dispatch_dttm,
+    FROM_UNIXTIME(UNIX_TIMESTAMP(Response_DtTm, 'MM/dd/yyyy hh:mm:ss a')) as response_dttm,
+    FROM_UNIXTIME(UNIX_TIMESTAMP(On_Scene_DtTm, 'MM/dd/yyyy hh:mm:ss a')) as on_scene_dttm,
+    FROM_UNIXTIME(UNIX_TIMESTAMP(Transport_DtTm, 'MM/dd/yyyy hh:mm:ss a')) as transport_dttm,
+    FROM_UNIXTIME(UNIX_TIMESTAMP(Hospital_DtTm, 'MM/dd/yyyy hh:mm:ss a')) as hospital_dttm,
+    Call_Final_Disposition, 
+    FROM_UNIXTIME(UNIX_TIMESTAMP(Available_DtTm, 'MM/dd/yyyy hh:mm:ss a')) as available_dttm,
+    Address, 
+    CAST(Zipcode_of_Incident AS INT), 
+    Battalion, 
+    Station_Area, 
+    Box,
+    Original_Priority, 
+    Priority, 
+    Final_Priority, 
+    CAST(lower(ALS_Unit) AS BOOLEAN), -- lower() helps handle "True" vs "true"
+    Call_Type_Group,
+    CAST(Number_of_Alarms AS INT), 
+    Unit_Type, 
+    CAST(Unit_sequence_in_call_dispatch AS INT),
+    Fire_Prevention_District, 
+    Supervisor_District, 
+    Neighborhooods_Analysis_Boundaries, 
+    RowID, 
+    case_location, 
+    FROM_UNIXTIME(UNIX_TIMESTAMP(data_as_of, 'MM/dd/yyyy hh:mm:ss a')) as data_as_of, 
+    FROM_UNIXTIME(UNIX_TIMESTAMP(data_loaded_at, 'MM/dd/yyyy hh:mm:ss a')) as data_loaded_at, 
+    CAST(Analysis_Neighborhoods AS INT), 
+    City 
+FROM fire_calls_staging;
+
+
+2. Execute following queries on ﬁre dataset.
+1. How many distinct types of calls were made to the ﬁre department?
+
+select count(distinct call_type) from fire_data;
+
+2. What are distinct types of calls made to the ﬁre department?
+
+SELECT DISTINCT call_type 
+FROM fire_data;
+
+3. Find out all responses for delayed times greater than 5 mins?
+4. What were the most common call types?
+
+SELECT call_type, COUNT(*) as count
+FROM fire_data
+GROUP BY call_type
+ORDER BY count DESC
+
+
+5. What zip codes accounted for the most common calls?
+
+SELECT zipcode_of_incident, COUNT(*) as count 
+FROM fire_data 
+GROUP BY zipcode_of_incident 
+ORDER BY count DESC;
+
+6. What San Francisco neighborhoods are in the zip codes 94102 and 94103?
+
+SELECT distinct neighborhoods_boundaries 
+FROM fire_data 
+WHERE city = 'San Francisco' AND zipcode_of_incident IN (94102, 94103);
+
+7. What was the sum of all calls, average, min, and max of the call response times?
+
+SELECT COUNT(call_number), FROM_UNIXTIME(AVG(UNIX_TIMESTAMP(response_dttm))), MAX(response_dttm), MIN(response_dttm) FROM fire_data;
+
+
+8. How many distinct years of data are in the CSV ﬁle?
+
+SELECT COUNT(DISTINCT year(call_date)) AS distinct_years
+FROM fire_data;
+
+9. What week of the year in 2018 had the most ﬁre calls?
+
+SELECT 
+    weekofyear(call_date) AS week,
+    COUNT(*) AS total_calls
+FROM fire_data
+WHERE year(call_date) = 2018
+GROUP BY weekofyear(call_date)
+ORDER BY total_calls DESC
+LIMIT 1;
+
+10. What neighborhoods in San Francisco had the worst response time in 2018?
+
+SELECT 
+    neighborhoods,
+    AVG(UNIX_TIMESTAMP(response_dttm) - UNIX_TIMESTAMP(dispatch_dttm)) AS avg_response_time_sec
+FROM fire_data
+WHERE YEAR(call_date) = 2018
+  AND response_dttm IS NOT NULL
+  AND dispatch_dttm IS NOT NULL
+GROUP BY neighborhoods
+ORDER BY avg_response_time_sec DESC
+LIMIT 10;
+SELECT FROM_UNIXTIME(AVG(UNIX_TIMESTAMP(response_dttm))) AS average_time FROM fire_data;

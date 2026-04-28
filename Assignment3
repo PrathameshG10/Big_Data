@@ -1,0 +1,129 @@
+1. Upload a file into HDFS. Count number of occurrences of each word in the file.
+   - create a text file in local machine.
+     ```
+     Red green blue
+     red Red green
+     BLUE Green black
+     red green blue
+     ```
+   - create a folder in hdfs and upload the file there (using hadoop fs -put ...).
+   - create external table with single column and the hdfs folder location.
+   
+   create external table word_data(
+  word STRING
+  )
+  location '/user/prathamesh/wordcount/input'
+
+   
+   - lower case line, split by space, then explode array.
+   - group by word and count.
+
+
+SELECT 
+    word_out AS words, 
+    COUNT(1) AS count 
+FROM word_data
+LATERAL VIEW explode(split(lower(word), ' ')) worddata AS word_out
+GROUP BY word_out;
+
+
+2. Implement Movie recommendation system.
+   - Example Input Data
+     ```
+     userId,movieId,rating,rtime
+     17,70,3,0
+     35,21,1,0
+     49,19,2,0
+     49,21,1,0
+     49,70,4,0
+     87,19,1,0
+     87,21,2,0
+     98,19,2,0
+     ```
+   - Create pairs of movies rated by same user.
+     ```
+     userId,movie1,rating1,movie2,rating2
+     49,21,1.0,70,4.0
+     49,19,2.0,21,1.0
+     49,19,2.0,70,4.0
+     87,19,1.0,21,2.0
+     ```
+   - Create correlation table.
+     ```
+     movie1,movie2,cnt,cor
+     19,21,2,-1.0
+     19,70,1,0.0
+     21,70,1,0.0
+     ```
+   - Predict Similar movies for given movie Id. Get the recommended movies titles from movies table.
+   - Hints
+     - Start with above small data tables to test accuracy of the steps.
+     - You will need to create new intermediate tables to store results of earlier queries.
+     - For main data use ORC format to speed-up the queries.
+     - You may need to change reducer tasks memory for quicker execution and avoid OutOfMemory errors.
+       - SET mapreduce.reduce.memory.mb = 4096;
+       - SET mapreduce.reduce.java.opts = -Xmx4096m;
+
+3. Execute following queries for movies dataset.
+   1. Upload movies data (movies_caret.csv) into HDFS directory (not in hive warehouse).
+   
+   2. Create external table movies1 with schema - `id INT, title STRING, genres STRING`.
+      - Find number of 'Action' movies.
+      
+       CREATE EXTERNAL TABLE movies1 (
+    id INT,
+    title STRING,
+    genres STRING
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '^'
+LOCATION '/user/prathamesh/movies/data'
+TBLPROPERTIES ("skip.header.line.count"="1");
+
+ select count(*) from movies1
+lateral view explode(split(genres , '\\|')) v_genres as genre
+where genre = 'Action'
+
+      
+   3. Create external table movies2 with schema - `id INT, title STRING, genres ARRAY<STRING>`.
+      - Find number of movies having single genre.
+
+
+
+CREATE EXTERNAL TABLE movies2 (
+    id INT,
+    title STRING,
+    genres ARRAY<STRING>
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '^'
+COLLECTION ITEMS TERMINATED BY '|'
+LOCATION '/user/prathamesh/movies/data'
+TBLPROPERTIES ("skip.header.line.count"="1");
+
+
+4. Upload busstops.json data into HDFS directory. Then create hive external table to fetch data using JsonSerDe.
+   ```
+   {"_id":{"$oid":"5a0720b478597fc11004d951"},"stop":"Non-BRTS","code":"103B-D-04","seq":4.0,"stage":1.0,"name":"Aranyeshwar Corner","location":{"type":"Point","coordinates":[73.857675,18.486381]}}
+   ```
+   ```
+   location STRUCT<type:STRING, coordinates:ARRAY<DOUBLE>>
+   ```
+   ```
+   When column-name have special charatcters like _ or $, they should be encapsulated in `back-quotes`.
+   ```
+CREATE EXTERNAL TABLE busstops_json (
+  `_id` STRUCT<`$oid`:STRING>,
+  stop STRING,
+  code STRING,
+  seq DOUBLE,
+  stage DOUBLE,
+  name STRING,
+  location STRUCT<
+    type:STRING,
+    coordinates:ARRAY<DOUBLE>
+  >
+)
+ROW FORMAT SERDE 'org.apache.hive.hcatalog.data.JsonSerDe'
+STORED AS TEXTFILE
+LOCATION '/user/sunbeam/files';
